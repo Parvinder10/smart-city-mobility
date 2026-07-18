@@ -1,0 +1,92 @@
+name: Smart City Mobility Platform CI/CD
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-format: '3.10'
+          python-version: '3.10'
+
+      - name: Install Linting Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black
+
+      - name: Run Flake8 Check
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings.
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run Black Format Check
+        run: |
+          black --check . --line-length 127 --exclude '/(docker|airflow/config|airflow/plugins)/'
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Set up Java 11 (Required for PySpark Testing)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyspark==3.4.1 psycopg2-binary requests
+
+      - name: Run Pytest suite
+        run: |
+          pytest tests/
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Spark Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/spark.Dockerfile
+          push: false
+
+      - name: Build FastAPI Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/fastapi.Dockerfile
+          push: false
+
+      - name: Build Airflow Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/airflow.Dockerfile
+          push: false
